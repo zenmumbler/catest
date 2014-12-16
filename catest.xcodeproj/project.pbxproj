@@ -10,6 +10,7 @@
 		8E9B0A271A3B7DFE003B3C9E /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E9B0A261A3B7DFE003B3C9E /* AudioUnit.framework */; };
 		8E9B0A291A3DA0F4003B3C9E /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8E9B0A281A3DA0F4003B3C9E /* Cocoa.framework */; };
 		8EBD23681A33A7CA00895063 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 8EBD23671A33A7CA00895063 /* main.mm */; };
+		8EF607371A40531F00FAFB41 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8EF607361A40531F00FAFB41 /* IOKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -29,6 +30,7 @@
 		8E9B0A281A3DA0F4003B3C9E /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		8EBD23641A33A7CA00895063 /* catest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = catest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EBD23671A33A7CA00895063 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		8EF607361A40531F00FAFB41 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,6 +38,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EF607371A40531F00FAFB41 /* IOKit.framework in Frameworks */,
 				8E9B0A291A3DA0F4003B3C9E /* Cocoa.framework in Frameworks */,
 				8E9B0A271A3B7DFE003B3C9E /* AudioUnit.framework in Frameworks */,
 			);
@@ -47,6 +50,7 @@
 		8E9B0A2A1A3DA0FE003B3C9E /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				8EF607361A40531F00FAFB41 /* IOKit.framework */,
 				8E9B0A261A3B7DFE003B3C9E /* AudioUnit.framework */,
 				8E9B0A281A3DA0F4003B3C9E /* Cocoa.framework */,
 			);
