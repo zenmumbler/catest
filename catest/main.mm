@@ -115,21 +115,91 @@ struct XINPUT_GAMEPAD {
 };
 
 
+static void HIDX360Action(void* context, IOReturn result, void* sender, IOHIDValueRef value) {
+	IOHIDElementRef element = IOHIDValueGetElement(value);
+	if (CFGetTypeID(element) != IOHIDElementGetTypeID()) {
+		return;
+	}
+	
+	int usage = IOHIDElementGetUsage(element);
+	CFIndex elementValue = IOHIDValueGetIntegerValue(value);
+	
+	if (usage == 50) {
+		printf("Left %lu\n", elementValue);
+	}
+	else if (usage == 53) {
+		printf("Right %lu\n", elementValue);
+	}
+	else if (usage > 47) {
+		float normValue = elementValue;
+		float deadZone = usage < 50 ? XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE : XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
+		
+		if (normValue < 0) {
+			normValue = std::min(0.0f, normValue + deadZone) / (32768.f - deadZone);
+		}
+		else {
+			normValue = std::max(0.0f, normValue - deadZone) / (32767.f - deadZone);
+		}
+		
+		switch (usage) {
+			case 48: controllerState.thumbLeftX = normValue; break;
+			case 49:
+				controllerState.thumbLeftY = normValue;
+				soundState.toneFreq = 532.2 + (normValue * 261.6);
+				break;
+			case 51: controllerState.thumbRightX = normValue; break;
+			case 52: controllerState.thumbRightY = normValue; break;
+		}
+	}
+	else {
+		X360Button::Mask m = X360Button::None;
+		
+		switch (usage) {
+			case  1: m = X360Button::A; break;
+			case  2: m = X360Button::B; break;
+			case  3: m = X360Button::X; break;
+			case  4: m = X360Button::Y; break;
+			case  5: m = X360Button::LeftShoulder; break;
+			case  6: m = X360Button::RightShoulder; break;
+			case  7: m = X360Button::LeftThumb; break;
+			case  8: m = X360Button::RightThumb; break;
+			case  9: m = X360Button::Start; break;
+			case 10: m = X360Button::Back; break;
+			case 11: m = X360Button::Home; break;
+			case 12: m = X360Button::DPadUp; break;
+			case 13: m = X360Button::DPadDown; break;
+			case 14: m = X360Button::DPadLeft; break;
+			case 15: m = X360Button::DPadRight; break;
+			default: break;
+		}
+		
+		if (elementValue)
+			controllerState.buttons |= m;
+		else
+			controllerState.buttons &= ~m;
+	}
+}
+
+
 static void HIDDeviceAdded(void* context, IOReturn result, void* sender, IOHIDDeviceRef device) {
 	CFStringRef manufacturer = (CFStringRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDManufacturerKey));
 	CFStringRef product = (CFStringRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey));
 
-	CFNumberRef productID = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVendorIDKey));
-	CFNumberRef vendorID = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductIDKey));
+	CFNumberRef vendorIDRef = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVendorIDKey));
+	CFNumberRef productIDRef = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductIDKey));
 
-	CFNumberRef usage = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
-	CFNumberRef usagePage = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsagePageKey));
+	int vendorID, productID;
+	CFNumberGetValue(vendorIDRef, kCFNumberIntType, &vendorID);
+	CFNumberGetValue(productIDRef, kCFNumberIntType, &productID);
 
-	uint32_t usageI, usagePageI;
-	CFNumberGetValue(usage, kCFNumberIntType, &usageI);
-	CFNumberGetValue(usagePage, kCFNumberIntType, &usagePageI);
+	CFNumberRef usageRef = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsageKey));
+	CFNumberRef usagePageRef = (CFNumberRef)IOHIDDeviceGetProperty(device, CFSTR(kIOHIDPrimaryUsagePageKey));
 
-	NSLog(@"Device detected: %@ %@, %d %d", manufacturer, product, usageI, usagePageI);
+	uint32_t usage, usagePage;
+	CFNumberGetValue(usageRef, kCFNumberIntType, &usage);
+	CFNumberGetValue(usagePageRef, kCFNumberIntType, &usagePage);
+
+	NSLog(@"Device detected: %@ %@, %d %d", manufacturer, product, usage, usagePage);
 
 	NSArray *elements = (__bridge_transfer NSArray *)IOHIDDeviceCopyMatchingElements(device, NULL, kIOHIDOptionsTypeNone);
 
@@ -181,10 +251,21 @@ static void HIDDeviceAdded(void* context, IOReturn result, void* sender, IOHIDDe
 		printf("page/usage = %d:%d  min/max = (%ld, %ld)\n", usagePage, usage, logicalMin, logicalMax);
 	}
 	
+	if (vendorID == 1118 && productID == 654) {
+		printf("X360 Controller\n");
+		if (IOHIDDeviceOpen(device, kIOHIDOptionsTypeNone) == kIOReturnSuccess) {
+			IOHIDDeviceRegisterInputValueCallback(device, HIDX360Action, nullptr);
+		}
+		else {
+			// wrongness
+		}
+	}
+	else {
+		printf("Unrecognized controller\n");
+	}
+	
 	CFRelease(manufacturer);
 	CFRelease(product);
-	CFRelease(usage);
-	CFRelease(usagePage);
 }
 
 
@@ -199,110 +280,31 @@ static void HIDDeviceRemoved(void* context, IOReturn result, void* sender, IOHID
 }
 
 
-static void HIDAction(void* context, IOReturn result, void* sender, IOHIDValueRef value) {
-	IOHIDElementRef element = IOHIDValueGetElement(value);
-	if (CFGetTypeID(element) != IOHIDElementGetTypeID()) {
-		return;
-	}
-	
-	int usage = IOHIDElementGetUsage(element);
-	
-	CFIndex elementValue = IOHIDValueGetIntegerValue(value);
-	
-	if (usage == 50) {
-		printf("Left %lu\n", elementValue);
-	}
-	else if (usage == 53) {
-		printf("Right %lu\n", elementValue);
-	}
-	else if (usage > 47) {
-		float normValue = elementValue;
-		float deadZone = usage < 50 ? XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE : XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
-		
-		if (normValue < 0) {
-			normValue = std::min(0.0f, normValue + deadZone) / (32768.f - deadZone);
-		}
-		else {
-			normValue = std::max(0.0f, normValue - deadZone) / (32767.f - deadZone);
-		}
-		
-		switch (usage) {
-			case 48: controllerState.thumbLeftX = normValue; break;
-			case 49:
-				controllerState.thumbLeftY = normValue;
-				soundState.toneFreq = 532.2 + (normValue * 261.6);
-				break;
-			case 51: controllerState.thumbRightX = normValue; break;
-			case 52: controllerState.thumbRightY = normValue; break;
-		}
-	}
-	else {
-		X360Button::Mask m = X360Button::None;
-
-		switch (usage) {
-			case  1: m = X360Button::A; break;
-			case  2: m = X360Button::B; break;
-			case  3: m = X360Button::X; break;
-			case  4: m = X360Button::Y; break;
-			case  5: m = X360Button::LeftShoulder; break;
-			case  6: m = X360Button::RightShoulder; break;
-			case  7: m = X360Button::LeftThumb; break;
-			case  8: m = X360Button::RightThumb; break;
-			case  9: m = X360Button::Start; break;
-			case 10: m = X360Button::Back; break;
-			case 11: m = X360Button::Home; break;
-			case 12: m = X360Button::DPadUp; break;
-			case 13: m = X360Button::DPadDown; break;
-			case 14: m = X360Button::DPadLeft; break;
-			case 15: m = X360Button::DPadRight; break;
-			default: break;
-		}
-		
-		if (elementValue)
-			controllerState.buttons |= m;
-		else
-			controllerState.buttons &= ~m;
-	}
-}
-
-
 static void initControllers() {
 	hidManager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
 	
-	if (hidManager) {
-		NSArray* criteria = @[
-			@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
-					[NSNumber numberWithInt:kHIDPage_GenericDesktop],
-				(NSString*)CFSTR(kIOHIDDeviceUsageKey):
-					[NSNumber numberWithInt:kHIDUsage_GD_Joystick]
-			},
-			@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
-					[NSNumber numberWithInt:kHIDPage_GenericDesktop],
-				(NSString*)CFSTR(kIOHIDDeviceUsageKey):
-					[NSNumber numberWithInt:kHIDUsage_GD_GamePad]
-			},
-			@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
-					[NSNumber numberWithInt:kHIDPage_GenericDesktop],
-				(NSString*)CFSTR(kIOHIDDeviceUsageKey):
-					[NSNumber numberWithInt:kHIDUsage_GD_MultiAxisController]
-			}
-		];
-		
-		IOHIDManagerSetDeviceMatchingMultiple(hidManager, (__bridge CFArrayRef)criteria);
-		IOHIDManagerRegisterDeviceMatchingCallback(hidManager, HIDDeviceAdded, nullptr);
-		IOHIDManagerRegisterDeviceRemovalCallback(hidManager, HIDDeviceRemoved, nullptr);
-		IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-		
-		if (IOHIDManagerOpen(hidManager, kIOHIDOptionsTypeNone) == kIOReturnSuccess) {
-			IOHIDManagerRegisterInputValueCallback(hidManager, HIDAction, nullptr);
+	NSArray* criteria = @[
+		@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
+				[NSNumber numberWithInt:kHIDPage_GenericDesktop],
+			(NSString*)CFSTR(kIOHIDDeviceUsageKey):
+				[NSNumber numberWithInt:kHIDUsage_GD_Joystick]
+		},
+		@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
+				[NSNumber numberWithInt:kHIDPage_GenericDesktop],
+			(NSString*)CFSTR(kIOHIDDeviceUsageKey):
+				[NSNumber numberWithInt:kHIDUsage_GD_GamePad]
+		},
+		@{	(NSString*)CFSTR(kIOHIDDeviceUsagePageKey):
+				[NSNumber numberWithInt:kHIDPage_GenericDesktop],
+			(NSString*)CFSTR(kIOHIDDeviceUsageKey):
+				[NSNumber numberWithInt:kHIDUsage_GD_MultiAxisController]
 		}
-		else {
-			// TODO(jeff): Diagnostic
-		}
-	}
-	else {
-		// TODO(jeff): Diagnostic
-	}
+	];
+	
+	IOHIDManagerSetDeviceMatchingMultiple(hidManager, (__bridge CFArrayRef)criteria);
+	IOHIDManagerRegisterDeviceMatchingCallback(hidManager, HIDDeviceAdded, nullptr);
+	IOHIDManagerRegisterDeviceRemovalCallback(hidManager, HIDDeviceRemoved, nullptr);
+	IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
 }
 
 
